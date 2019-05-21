@@ -310,6 +310,98 @@ newtype WildcardSubscriptionAvailable = WildcardSubscriptionAvailable Bool deriv
 newtype SubscriptionIdentifierAvailable = SubscriptionIdentifierAvailable Bool deriving newtype (Binary, Eq, Show)
 newtype SharedSubscriptionAvailable = SharedSubscriptionAvailable Bool deriving newtype (Binary, Eq, Show)
 
+data Property
+    = PropertyPayloadFormatIndicator PayloadFormatIndicator
+    | PropertyMessageExpiryInterval MessageExpiryInterval
+    | PropertyContentType ContentType
+    | PropertyResponseTopic ResponseTopic
+    | PropertyCorrelationData CorrelationData
+    | PropertySubscriptionIdentifier SubscriptionIdentifier
+    | PropertySessionExpiryInterval SessionExpiryInterval
+    | PropertyAssignedClientIdentifier AssignedClientIdentifier
+    | PropertyServerKeepAlive ServerKeepAlive
+    | PropertyAuthenticationMethod AuthenticationMethod
+    | PropertyAuthenticationData AuthenticationData
+    | PropertyRequestProblemInformation RequestProblemInformation
+    | PropertyWillDelayInterval WillDelayInterval
+    | PropertyRequestResponseInformation RequestResponseInformation
+    | PropertyResponseInformation ResponseInformation
+    | PropertyServerReference ServerReference
+    | PropertyReasonString ReasonString
+    | PropertyReceiveMaximum ReceiveMaximum
+    | PropertyTopicAliasMaximum TopicAliasMaximum
+    | PropertyTopicAlias TopicAlias
+    | PropertyMaximumQoS MaximumQoS
+    | PropertyRetainAvailable RetainAvailable
+    | PropertyUserProperty UserProperty
+    | PropertyMaximumPacketSize MaximumPacketSize
+    | PropertyWildcardSubscriptionAvailable WildcardSubscriptionAvailable
+    | PropertySubscriptionIdentifierAvailable SubscriptionIdentifierAvailable
+    | PropertySharedSubscriptionAvailable SharedSubscriptionAvailable
+    deriving (Eq, Show)
+
+instance Binary Property where
+    get = getWord8 >>= toProperty
+      where
+        toProperty 0x01 = PropertyPayloadFormatIndicator <$> get
+        toProperty 0x02 = PropertyMessageExpiryInterval <$> get
+        toProperty 0x03 = PropertyContentType <$> get
+        toProperty 0x08 = PropertyResponseTopic <$> get
+        toProperty 0x09 = PropertyCorrelationData <$> get
+        toProperty 0x0b = PropertySubscriptionIdentifier <$> get
+        toProperty 0x11 = PropertySessionExpiryInterval <$> get
+        toProperty 0x12 = PropertyAssignedClientIdentifier <$> get
+        toProperty 0x13 = PropertyServerKeepAlive <$> get
+        toProperty 0x15 = PropertyAuthenticationMethod <$> get
+        toProperty 0x16 = PropertyAuthenticationData <$> get
+        toProperty 0x17 = PropertyRequestProblemInformation <$> get
+        toProperty 0x18 = PropertyWillDelayInterval <$> get
+        toProperty 0x19 = PropertyRequestResponseInformation <$> get
+        toProperty 0x1a = PropertyResponseInformation <$> get
+        toProperty 0x1c = PropertyServerReference <$> get
+        toProperty 0x1f = PropertyReasonString <$> get
+        toProperty 0x21 = PropertyReceiveMaximum <$> get
+        toProperty 0x22 = PropertyTopicAliasMaximum <$> get
+        toProperty 0x23 = PropertyTopicAlias <$> get
+        toProperty 0x24 = PropertyMaximumQoS <$> get
+        toProperty 0x25 = PropertyRetainAvailable <$> get
+        toProperty 0x26 = PropertyUserProperty <$> get
+        toProperty 0x27 = PropertyMaximumPacketSize <$> get
+        toProperty 0x28 = PropertyWildcardSubscriptionAvailable <$> get
+        toProperty 0x29 = PropertySubscriptionIdentifierAvailable <$> get
+        toProperty 0x2a = PropertySharedSubscriptionAvailable <$> get
+        toProperty n    = fail $ "Invalid property ID " <> show n
+
+    put (PropertyPayloadFormatIndicator x)          = putWord8 0x01 *> put x
+    put (PropertyMessageExpiryInterval x)           = putWord8 0x02 *> put x
+    put (PropertyContentType x)                     = putWord8 0x03 *> put x
+    put (PropertyResponseTopic x)                   = putWord8 0x08 *> put x
+    put (PropertyCorrelationData x)                 = putWord8 0x09 *> put x
+    put (PropertySubscriptionIdentifier x)          = putWord8 0x0b *> put x
+    put (PropertySessionExpiryInterval x)           = putWord8 0x11 *> put x
+    put (PropertyAssignedClientIdentifier x)        = putWord8 0x12 *> put x
+    put (PropertyServerKeepAlive x)                 = putWord8 0x13 *> put x
+    put (PropertyAuthenticationMethod x)            = putWord8 0x15 *> put x
+    put (PropertyAuthenticationData x)              = putWord8 0x16 *> put x
+    put (PropertyRequestProblemInformation x)       = putWord8 0x17 *> put x
+    put (PropertyWillDelayInterval x)               = putWord8 0x18 *> put x
+    put (PropertyRequestResponseInformation x)      = putWord8 0x19 *> put x
+    put (PropertyResponseInformation x)             = putWord8 0x1a *> put x
+    put (PropertyServerReference x)                 = putWord8 0x1c *> put x
+    put (PropertyReasonString x)                    = putWord8 0x1f *> put x
+    put (PropertyReceiveMaximum x)                  = putWord8 0x21 *> put x
+    put (PropertyTopicAliasMaximum x)               = putWord8 0x22 *> put x
+    put (PropertyTopicAlias x)                      = putWord8 0x23 *> put x
+    put (PropertyMaximumQoS x)                      = putWord8 0x24 *> put x
+    put (PropertyRetainAvailable x)                 = putWord8 0x25 *> put x
+    put (PropertyUserProperty x)                    = putWord8 0x26 *> put x
+    put (PropertyMaximumPacketSize x)               = putWord8 0x27 *> put x
+    put (PropertyWildcardSubscriptionAvailable x)   = putWord8 0x28 *> put x
+    put (PropertySubscriptionIdentifierAvailable x) = putWord8 0x29 *> put x
+    put (PropertySharedSubscriptionAvailable x)     = putWord8 0x2a *> put x
+
+
+
 {-
 data ConnFlags = ConnFlags
     { connFlagsUserName     :: Bool
@@ -633,42 +725,42 @@ data DisconnectReason
     | DisconnectReasonMaximumConnectTime
     | DisconnectReasonSubscriptionIdentifiersNotSupported
     | DisconnectReasonWildcardSubscriptionsNotSupported
+    deriving (Eq, Show)
 
 instance Binary DisconnectReason where
-    get = do
-        byte <- getWord8
-        case byte of
-            n | n == 0x00 -> pure DisconnectReasonNormalDisconnection
-            n | n == 0x04 -> pure DisconnectReasonDisconnectWithWillMessage
-            n | n == 0x80 -> pure DisconnectReasonUnspecifiedError
-            n | n == 0x81 -> pure DisconnectReasonMalformedPacket
-            n | n == 0x82 -> pure DisconnectReasonProtocolError
-            n | n == 0x83 -> pure DisconnectReasonImplementationSpecificError
-            n | n == 0x87 -> pure DisconnectReasonNotAuthorized
-            n | n == 0x89 -> pure DisconnectReasonServerBusy
-            n | n == 0x8b -> pure DisconnectReasonServerShuttingDown
-            n | n == 0x8c -> pure DisconnectReasonBadAuthenticationMethod
-            n | n == 0x8d -> pure DisconnectReasonKeepAliveTimeout
-            n | n == 0x8e -> pure DisconnectReasonSessionTakenOver
-            n | n == 0x8f -> pure DisconnectReasonTopicFilterInvalid
-            n | n == 0x90 -> pure DisconnectReasonTopicNameInvalid
-            n | n == 0x93 -> pure DisconnectReasonReceiveMaximumExceeded
-            n | n == 0x94 -> pure DisconnectReasonTopicAliasInvalid
-            n | n == 0x95 -> pure DisconnectReasonPacketTooLarge
-            n | n == 0x96 -> pure DisconnectReasonMessageRateTooHigh
-            n | n == 0x97 -> pure DisconnectReasonQuotaExceeded
-            n | n == 0x98 -> pure DisconnectReasonAdministrativeAction
-            n | n == 0x99 -> pure DisconnectReasonPayloadFormatInvalid
-            n | n == 0x9a -> pure DisconnectReasonRetainNotSupported
-            n | n == 0x9b -> pure DisconnectReasonQoSNotSupported
-            n | n == 0x9c -> pure DisconnectReasonUseAnotherServer
-            n | n == 0x9d -> pure DisconnectReasonServerMoved
-            n | n == 0x9e -> pure DisconnectReasonSharedSubscriptionsNotSupported
-            n | n == 0x9f -> pure DisconnectReasonConnectionRateExceeded
-            n | n == 0xa0 -> pure DisconnectReasonMaximumConnectTime
-            n | n == 0xa1 -> pure DisconnectReasonSubscriptionIdentifiersNotSupported
-            n | n == 0xa2 -> pure DisconnectReasonWildcardSubscriptionsNotSupported
-              | otherwise -> fail $ "Invalid disconnect reason code " <> show n
+    get = getWord8 >>= toReason
+      where
+        toReason 0x00 = pure DisconnectReasonNormalDisconnection
+        toReason 0x04 = pure DisconnectReasonDisconnectWithWillMessage
+        toReason 0x80 = pure DisconnectReasonUnspecifiedError
+        toReason 0x81 = pure DisconnectReasonMalformedPacket
+        toReason 0x82 = pure DisconnectReasonProtocolError
+        toReason 0x83 = pure DisconnectReasonImplementationSpecificError
+        toReason 0x87 = pure DisconnectReasonNotAuthorized
+        toReason 0x89 = pure DisconnectReasonServerBusy
+        toReason 0x8b = pure DisconnectReasonServerShuttingDown
+        toReason 0x8c = pure DisconnectReasonBadAuthenticationMethod
+        toReason 0x8d = pure DisconnectReasonKeepAliveTimeout
+        toReason 0x8e = pure DisconnectReasonSessionTakenOver
+        toReason 0x8f = pure DisconnectReasonTopicFilterInvalid
+        toReason 0x90 = pure DisconnectReasonTopicNameInvalid
+        toReason 0x93 = pure DisconnectReasonReceiveMaximumExceeded
+        toReason 0x94 = pure DisconnectReasonTopicAliasInvalid
+        toReason 0x95 = pure DisconnectReasonPacketTooLarge
+        toReason 0x96 = pure DisconnectReasonMessageRateTooHigh
+        toReason 0x97 = pure DisconnectReasonQuotaExceeded
+        toReason 0x98 = pure DisconnectReasonAdministrativeAction
+        toReason 0x99 = pure DisconnectReasonPayloadFormatInvalid
+        toReason 0x9a = pure DisconnectReasonRetainNotSupported
+        toReason 0x9b = pure DisconnectReasonQoSNotSupported
+        toReason 0x9c = pure DisconnectReasonUseAnotherServer
+        toReason 0x9d = pure DisconnectReasonServerMoved
+        toReason 0x9e = pure DisconnectReasonSharedSubscriptionsNotSupported
+        toReason 0x9f = pure DisconnectReasonConnectionRateExceeded
+        toReason 0xa0 = pure DisconnectReasonMaximumConnectTime
+        toReason 0xa1 = pure DisconnectReasonSubscriptionIdentifiersNotSupported
+        toReason 0xa2 = pure DisconnectReasonWildcardSubscriptionsNotSupported
+        toReason n    = fail $ "Invalid disconnect reason code " <> show n
 
     put DisconnectReasonNormalDisconnection                 = putWord8 0x00
     put DisconnectReasonDisconnectWithWillMessage           = putWord8 0x04
@@ -701,10 +793,34 @@ instance Binary DisconnectReason where
     put DisconnectReasonSubscriptionIdentifiersNotSupported = putWord8 0xa1
     put DisconnectReasonWildcardSubscriptionsNotSupported   = putWord8 0xa2
 
-data DisconnectR = DisconnectR
-    { disconnectRReason :: DisconnectReason
+data DisconnectProperty
+    = DisconnectPropertySessionExpiryInterval SessionExpiryInterval
+    | DisconnectPropertyServerReference ServerReference
+    | DisconnectPropertyReasonString ReasonString
+    | DisconnectPropertyUserProperty UserProperty
 
-    }
+instance Binary DisconnectProperty where
+    get = getWord8 >>= toProp
+      where
+        toProp 0x11 = DisconnectPropertySessionExpiryInterval <$> get
+        toProp 0x1c = DisconnectPropertyServerReference <$> get
+        toProp 0x1f = DisconnectPropertyReasonString <$> get
+        toProp 0x26 = DisconnectPropertyUserProperty <$> get
+        toProp n    = fail $ "Invalid disconnect property ID " <> show n
+
+    put (DisconnectPropertySessionExpiryInterval interval) = putWord8 0x11 *> put interval
+    put (DisconnectPropertyServerReference reference)      = putWord8 0x1c *> put reference
+    put (DisconnectPropertyReasonString reasonStr)         = putWord8 0x1f *> put reasonStr
+    put (DisconnectPropertyUserProperty userProperty)      = putWord8 0x26 *> put userProperty
+
+data ClientDisconnectR = ClientDisconnectR
+    { clientDisconnectRReason                :: DisconnectReason
+    , clientDisconnectRSessionExpiryInterval :: Maybe SessionExpiryInterval
+    , clientDisconnectRServerReference       :: Maybe ServerReference
+    , clientDisconnectReasonString           :: Maybe ReasonString
+    , clientDisconnectUserProperty           :: Maybe UserProperty
+    } deriving (Eq, Show)
+
 
 data ControlPacket
     = Connect ConnectR
