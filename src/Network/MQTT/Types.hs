@@ -212,52 +212,53 @@ headToPacketType :: Word8 -> PacketType
 headToPacketType = toEnum . fromIntegral . (`div` 16)
 -}
 
-newtype RemainingLength = RemainingLength Int deriving (Eq, Show)
+newtype VariableByteInteger = VariableByteInteger Int deriving (Eq, Show)
+-- type VariableByteInteger = VariableByteInteger
 
-instance Binary RemainingLength where
+instance Binary VariableByteInteger where
     get = do
         d0 <- fromIntegral <$> getWord8
         if d0 < 0x80
-        then pure . RemainingLength $ d0
+        then pure . VariableByteInteger $ d0
         else do
             d1 <- fromIntegral <$> getWord8
             if d1 < 0x80
-            then pure . RemainingLength $ (d0 - 0x80) + d1 * 0x80
+            then pure . VariableByteInteger $ (d0 - 0x80) + d1 * 0x80
             else do
                 d2 <- fromIntegral <$> getWord8
                 if d2 < 0x80
-                then pure . RemainingLength $ (d0 - 0x80) + (d1 - 0x80) * 0x80 + d2 * 0x4000
+                then pure . VariableByteInteger $ (d0 - 0x80) + (d1 - 0x80) * 0x80 + d2 * 0x4000
                 else do
                     d3 <- fromIntegral <$> getWord8
                     if d3 < 0x80
-                    then pure . RemainingLength $ (d0 - 0x80) + (d1 - 0x80) * 0x80 + (d2 - 0x80) * 0x4000 + d3 * 0x200000
+                    then pure . VariableByteInteger $ (d0 - 0x80) + (d1 - 0x80) * 0x80 + (d2 - 0x80) * 0x4000 + d3 * 0x200000
                     else fail $ malformed d0 d1 d2 d3
       where
         malformed = printf "malformed remaining length %#04x %#04x %#04x %#04x"
 
-    put (RemainingLength n) | n < 0x80      = putWord8 $ fromIntegral n
-                            | n < 0x4000    = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
-                                                  d1 = fromIntegral $ n `div` 0x80
-                                              in putWord8 d0 *> putWord8 d1
-                            | n < 0x200000  = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
-                                                  d1 = fromIntegral $ ((n `div` 0x80) `rem` 0x80) + 0x80
-                                                  d2 = fromIntegral $ (n `div` 0x4000) `rem` 0x80
-                                              in putWord8 d0 *> putWord8 d1 *> putWord8 d2
-                            | otherwise     = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
-                                                  d1 = fromIntegral $ ((n `div` 0x80) `rem` 0x80) + 0x80
-                                                  d2 = fromIntegral $ ((n `div` 0x4000) `rem` 0x80) + 0x80
-                                                  d3 = fromIntegral $ (n `div` 0x200000) `rem` 0x80
-                                              in putWord8 d0 *> putWord8 d1 *> putWord8 d2 *> putWord8 d3
+    put (VariableByteInteger n) | n < 0x80      = putWord8 $ fromIntegral n
+                                | n < 0x4000    = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
+                                                      d1 = fromIntegral $ n `div` 0x80
+                                                  in putWord8 d0 *> putWord8 d1
+                                | n < 0x200000  = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
+                                                      d1 = fromIntegral $ ((n `div` 0x80) `rem` 0x80) + 0x80
+                                                      d2 = fromIntegral $ (n `div` 0x4000) `rem` 0x80
+                                                  in putWord8 d0 *> putWord8 d1 *> putWord8 d2
+                                | otherwise     = let d0 = fromIntegral $ (n `rem` 0x80) + 0x80
+                                                      d1 = fromIntegral $ ((n `div` 0x80) `rem` 0x80) + 0x80
+                                                      d2 = fromIntegral $ ((n `div` 0x4000) `rem` 0x80) + 0x80
+                                                      d3 = fromIntegral $ (n `div` 0x200000) `rem` 0x80
+                                                  in putWord8 d0 *> putWord8 d1 *> putWord8 d2 *> putWord8 d3
 
-getRemainingLength :: Get RemainingLength
-getRemainingLength = get
+getVariableByteInteger :: Get VariableByteInteger
+getVariableByteInteger = get
 
-toRemainingLength :: Int -> Either String RemainingLength
-toRemainingLength n | 0 <= n && n < 0x10000000  = Right (RemainingLength n)
+toVariableByteInteger :: Int -> Either String VariableByteInteger
+toVariableByteInteger n | 0 <= n && n < 0x10000000  = Right (VariableByteInteger n)
                     | otherwise                 = Left $ show n <> " is greater than allowed remaining length"
 
-fromRemainingLength :: RemainingLength -> Int
-fromRemainingLength (RemainingLength n) = n
+fromVariableByteInteger :: VariableByteInteger -> Int
+fromVariableByteInteger (VariableByteInteger n) = n
 
 data QoS = AtMostOnce | AtLeastOnce | ExactOnce deriving (Bounded, Enum, Eq, Show)
 
@@ -578,7 +579,7 @@ putLenBody :: Binary a => Word8 -> a -> Put
 putLenBody packetType body = do
     putWord8 packetType
     let bodyBytes = encode body
-        eitherLen = toRemainingLength . fromIntegral $ BL.length bodyBytes
+        eitherLen = toVariableByteInteger . fromIntegral $ BL.length bodyBytes
     case eitherLen of
         Left e    -> fail e
         Right len -> put len *> putLazyByteString bodyBytes
@@ -586,8 +587,8 @@ putLenBody packetType body = do
 instance Binary ControlPacket where
     get = do
         header <- getWord8
-        remainingLength <- getRemainingLength
-        let body = getLazyByteString . fromIntegral $ fromRemainingLength remainingLength
+        remainingLength <- getVariableByteInteger
+        let body = getLazyByteString . fromIntegral $ fromVariableByteInteger remainingLength
         case header `div` 16 of
             0  -> fail "MQTT Packet Type number 0 is reserved"
             1  -> Connect . decode <$> body

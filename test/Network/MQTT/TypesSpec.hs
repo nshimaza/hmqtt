@@ -209,96 +209,96 @@ spec = do
 -}
 
     describe "Remaining Length" $ do
-        prop "toRemainingLength returns Left for negative value" $ \(Positive n) -> do
-            toRemainingLength (-n) `shouldSatisfy` isLeft
+        prop "toVariableByteInteger returns Left for negative value" $ \(Positive n) -> do
+            toVariableByteInteger (-n) `shouldSatisfy` isLeft
 
-        prop "toRemainingLength returns Left for length bigger than 0x0fffffff" $ forAll (choose (0x10000000, 0x7fffffffffffffff)) $ \n -> do
-            toRemainingLength n `shouldSatisfy` isLeft
+        prop "toVariableByteInteger returns Left for length bigger than 0x0fffffff" $ forAll (choose (0x10000000, 0x7fffffffffffffff)) $ \n -> do
+            toVariableByteInteger n `shouldSatisfy` isLeft
 
-        prop "toRemainingLength returns Right for length between 0 and 0x0fffffff" $ forAll (choose (0, 0x0fffffff)) $ \n -> do
-            toRemainingLength n `shouldSatisfy` isRight
+        prop "toVariableByteInteger returns Right for length between 0 and 0x0fffffff" $ forAll (choose (0, 0x0fffffff)) $ \n -> do
+            toVariableByteInteger n `shouldSatisfy` isRight
 
         it "encodes 0x00 to [0x00]" $ do
-            case toRemainingLength 0x00 of
+            case toVariableByteInteger 0x00 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0x00]
 
         it "encodes 0x7f to [0x7f]" $ do
-            case toRemainingLength 0x7f of
+            case toVariableByteInteger 0x7f of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0x7f]
 
         it "encodes 0x80 to [0x80, 0x01]" $ do
-            case toRemainingLength 0x80 of
+            case toVariableByteInteger 0x80 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0x80, 0x01]
 
         it "encodes 0x3fff to [0xff, 0x7f]" $ do
-            case toRemainingLength 0x3fff of
+            case toVariableByteInteger 0x3fff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0xff, 0x7f]
 
         it "encodes 0x4000 to [0x80, 0x80, 0x01]" $ do
-            case toRemainingLength 0x4000 of
+            case toVariableByteInteger 0x4000 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0x80, 0x80, 0x01]
 
         it "encodes 0x1fffff to [0xff, 0xff, 0x7f]" $ do
-            case toRemainingLength 0x1fffff of
+            case toVariableByteInteger 0x1fffff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0xff, 0xff, 0x7f]
 
         it "encodes 0x200000 to [0x80, 0x80, 0x80, 0x01]" $ do
-            case toRemainingLength 0x200000 of
+            case toVariableByteInteger 0x200000 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0x80, 0x80, 0x80, 0x01]
 
         it "encodes 0x0fffffff to [0xff, 0xff, 0xff, 0x7f]" $ do
-            case toRemainingLength 0x0fffffff of
+            case toVariableByteInteger 0x0fffffff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> encode l `shouldBe` pack [0xff, 0xff, 0xff, 0x7f]
 
         it "decodes [0x00] to 0x00" $ do
-            case toRemainingLength 0x00 of
+            case toVariableByteInteger 0x00 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0x00])
         it "decodes [0x7f] to 0x7f" $ do
-            case toRemainingLength 0x7f of
+            case toVariableByteInteger 0x7f of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0x7f])
 
         it "decodes [0x80, 0x01] to 0x80" $ do
-            case toRemainingLength 0x80 of
+            case toVariableByteInteger 0x80 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0x80, 0x01])
 
         it "decodes [0xff, 0x7f] to 0x3fff" $ do
-            case toRemainingLength 0x3fff of
+            case toVariableByteInteger 0x3fff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0xff, 0x7f])
 
         it "decodes [0x80, 0x80, 0x01] to 0x4000" $ do
-            case toRemainingLength 0x4000 of
+            case toVariableByteInteger 0x4000 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0x80, 0x80, 0x01])
 
         it "decodes [0xff, 0xff, 0x7f] to 0x1fffff" $ do
-            case toRemainingLength 0x1fffff of
+            case toVariableByteInteger 0x1fffff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0xff, 0xff, 0x7f])
 
         it "decodes [0x80, 0x80, 0x80, 0x01] to 0x200000" $ do
-            case toRemainingLength 0x200000 of
+            case toVariableByteInteger 0x200000 of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0x80, 0x80, 0x80, 0x01])
 
         it "decodes [0xff, 0xff, 0xff, 0x7f] to 0x0fffffff" $ do
-            case toRemainingLength 0x0fffffff of
+            case toVariableByteInteger 0x0fffffff of
                 Left  _ -> error "Impossible happened!"
                 Right l -> l `shouldBe` decode (pack [0xff, 0xff, 0xff, 0x7f])
 
         prop "(encode . decode) should be id" $ forAll (choose (0, 0x0fffffff)) $ \n -> do
-            case toRemainingLength n of
+            case toVariableByteInteger n of
                 Left  _ -> error "Impossible happened!"
                 Right l -> (decode . encode) l `shouldBe` l
 
