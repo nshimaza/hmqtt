@@ -19,7 +19,7 @@ import           Data.ByteString.Lazy as BL (ByteString, foldl', length, pack)
 import           Data.Foldable        (traverse_)
 import           Data.Monoid          ((<>))
 import           Data.Typeable        (Typeable, typeOf)
-import           Data.Word            (Word16, Word8)
+import           Data.Word            (Word16, Word32, Word8)
 import           GHC.Generics         (Generic)
 import           Text.Printf          (printf)
 
@@ -50,7 +50,7 @@ data Utf8State
     | Utf8Invalid
     deriving (Eq)
 
--- | Transission validator state machine by received byte.
+-- | Transition validator state machine by received byte.
 utf8NextState :: Utf8State -> Word8 -> Utf8State
 utf8NextState Utf8Init c        | c == 0    = Utf8Invalid
                                 | c < 0x80  = Utf8Init
@@ -213,7 +213,6 @@ headToPacketType = toEnum . fromIntegral . (`div` 16)
 -}
 
 newtype VariableByteInteger = VariableByteInteger Int deriving (Eq, Show)
--- type VariableByteInteger = VariableByteInteger
 
 instance Binary VariableByteInteger where
     get = do
@@ -255,16 +254,61 @@ getVariableByteInteger = get
 
 toVariableByteInteger :: Int -> Either String VariableByteInteger
 toVariableByteInteger n | 0 <= n && n < 0x10000000  = Right (VariableByteInteger n)
-                    | otherwise                 = Left $ show n <> " is greater than allowed remaining length"
+                        | otherwise                 = Left $ show n <> " is greater than allowed remaining length"
 
 fromVariableByteInteger :: VariableByteInteger -> Int
 fromVariableByteInteger (VariableByteInteger n) = n
+
+newtype BinaryData = BinaryData BL.ByteString deriving (Eq, Show)
+
+-- | Factory function to construct valid BinaryData.
+toBinaryData :: BL.ByteString -> Either String BinaryData
+toBinaryData bs | BL.length bs < 0x10000 = Right $ BinaryData bs
+                | otherwise              = Left $ printf "ByteString length must be smaller than 0x10000 but was %d." $ BL.length bs
+
+instance Binary BinaryData where
+    get = getWord16be >>= getLazyByteString . fromIntegral >>= pure . BinaryData
+    put (BinaryData s) = putWord16be (fromIntegral $ BL.length s) *> putLazyByteString s
+
+data PayloadFormat = PayloadFormatUnspecifiedBytes | PayloadFormatUtf8EncodedCharacterData deriving (Bounded, Enum, Eq, Show)
+
+instance Binary PayloadFormat where
+    get = getEnum8
+    put = putEnum8
 
 data QoS = AtMostOnce | AtLeastOnce | ExactOnce deriving (Bounded, Enum, Eq, Show)
 
 instance Binary QoS where
     get = getEnum8
     put = putEnum8
+
+newtype PayloadFormatIndicator = PayloadFormatIndicator PayloadFormat deriving newtype (Binary, Eq, Show)
+newtype MessageExpiryInterval = MessageExpiryInterval Word32 deriving newtype (Binary, Eq, Show)
+newtype ContentType = ContentType Utf8String deriving newtype (Binary, Eq, Show)
+newtype ResponseTopic = ResponseTopic Utf8String deriving newtype (Binary, Eq, Show)
+newtype CorrelationData = CorrelationData BinaryData deriving newtype (Binary, Eq, Show)
+newtype SubscriptionIdentifier = SubscriptionIdentifier VariableByteInteger deriving newtype (Binary, Eq, Show)
+newtype SessionExpiryInterval = SessionExpiryInterval Word32 deriving newtype (Binary, Eq, Show)
+newtype AssignedClientIdentifier = AssignedClientIdentifier Utf8String deriving newtype (Binary, Eq, Show)
+newtype ServerKeepAlive = ServerKeepAlive Word16 deriving newtype (Binary, Eq, Show)
+newtype AuthenticationMethod = AuthenticationMethod Utf8String deriving newtype (Binary, Eq, Show)
+newtype AuthenticationData = AuthenticationData BinaryData deriving newtype (Binary, Eq, Show)
+newtype RequestProblemInformation = RequestProblemInformation Bool deriving newtype (Binary, Eq, Show)
+newtype WillDelayInterval = WillDelayInterval Word32 deriving newtype (Binary, Eq, Show)
+newtype RequestResponseInformation = RequestResponseInformation Bool deriving newtype (Binary, Eq, Show)
+newtype ResponseInformation = ResponseInformation Utf8String deriving newtype (Binary, Eq, Show)
+newtype ServerReference = ServerReference Utf8String deriving newtype (Binary, Eq, Show)
+newtype ReasonString = ReasonString Utf8String deriving newtype (Binary, Eq, Show)
+newtype ReceiveMaximum = ReceiveMaximum Word16 deriving newtype (Binary, Eq, Show)
+newtype TopicAliasMaximum = TopicAliasMaximum Word16 deriving newtype (Binary, Eq, Show)
+newtype TopicAlias = TopicAlias Word16 deriving newtype (Binary, Eq, Show)
+newtype MaximumQoS = MaximumQoS QoS deriving newtype (Binary, Eq, Show)
+newtype RetainAvailable = RetainAvailable Bool deriving newtype (Binary, Eq, Show)
+newtype UserProperty = UserProperty Utf8String deriving newtype (Binary, Eq, Show)
+newtype MaximumPacketSize = MaximumPacketSize Word32 deriving newtype (Binary, Eq, Show)
+newtype WildcardSubscriptionAvailable = WildcardSubscriptionAvailable Bool deriving newtype (Binary, Eq, Show)
+newtype SubscriptionIdentifierAvailable = SubscriptionIdentifierAvailable Bool deriving newtype (Binary, Eq, Show)
+newtype SharedSubscriptionAvailable = SharedSubscriptionAvailable Bool deriving newtype (Binary, Eq, Show)
 
 {-
 data ConnFlags = ConnFlags
@@ -319,7 +363,7 @@ putBin64k bs = do
         let len = BL.length bs
         if len < 0x10000
         then putWord16be (fromIntegral len) *> putLazyByteString bs
-        else fail "cannot encode binaly longer than 0xffff bytes"
+        else fail "cannot encode binary longer than 0xffff bytes"
 
 newtype WillMessage = WillMessage BL.ByteString deriving (Eq, Show)
 
@@ -549,7 +593,7 @@ instance Binary SubAckR where
 
 data UnsubscribeR = UnsubscribeR
     { unsubscribeRPacketID     :: PacketID
-    , unsubscribeRTopicfilters :: [Topic]
+    , unsubscribeRTopicFilters :: [Topic]
     } deriving (Eq, Show)
 
 instance Binary UnsubscribeR where
@@ -557,6 +601,110 @@ instance Binary UnsubscribeR where
         pid <- get
         UnsubscribeR pid <$> getList
     put (UnsubscribeR pid topics) = put pid *> traverse_ put topics
+
+data DisconnectReason
+    = DisconnectReasonNormalDisconnection
+    | DisconnectReasonDisconnectWithWillMessage
+    | DisconnectReasonUnspecifiedError
+    | DisconnectReasonMalformedPacket
+    | DisconnectReasonProtocolError
+    | DisconnectReasonImplementationSpecificError
+    | DisconnectReasonNotAuthorized
+    | DisconnectReasonServerBusy
+    | DisconnectReasonServerShuttingDown
+    | DisconnectReasonBadAuthenticationMethod
+    | DisconnectReasonKeepAliveTimeout
+    | DisconnectReasonSessionTakenOver
+    | DisconnectReasonTopicFilterInvalid
+    | DisconnectReasonTopicNameInvalid
+    | DisconnectReasonReceiveMaximumExceeded
+    | DisconnectReasonTopicAliasInvalid
+    | DisconnectReasonPacketTooLarge
+    | DisconnectReasonMessageRateTooHigh
+    | DisconnectReasonQuotaExceeded
+    | DisconnectReasonAdministrativeAction
+    | DisconnectReasonPayloadFormatInvalid
+    | DisconnectReasonRetainNotSupported
+    | DisconnectReasonQoSNotSupported
+    | DisconnectReasonUseAnotherServer
+    | DisconnectReasonServerMoved
+    | DisconnectReasonSharedSubscriptionsNotSupported
+    | DisconnectReasonConnectionRateExceeded
+    | DisconnectReasonMaximumConnectTime
+    | DisconnectReasonSubscriptionIdentifiersNotSupported
+    | DisconnectReasonWildcardSubscriptionsNotSupported
+
+instance Binary DisconnectReason where
+    get = do
+        byte <- getWord8
+        case byte of
+            n | n == 0x00 -> pure DisconnectReasonNormalDisconnection
+            n | n == 0x04 -> pure DisconnectReasonDisconnectWithWillMessage
+            n | n == 0x80 -> pure DisconnectReasonUnspecifiedError
+            n | n == 0x81 -> pure DisconnectReasonMalformedPacket
+            n | n == 0x82 -> pure DisconnectReasonProtocolError
+            n | n == 0x83 -> pure DisconnectReasonImplementationSpecificError
+            n | n == 0x87 -> pure DisconnectReasonNotAuthorized
+            n | n == 0x89 -> pure DisconnectReasonServerBusy
+            n | n == 0x8b -> pure DisconnectReasonServerShuttingDown
+            n | n == 0x8c -> pure DisconnectReasonBadAuthenticationMethod
+            n | n == 0x8d -> pure DisconnectReasonKeepAliveTimeout
+            n | n == 0x8e -> pure DisconnectReasonSessionTakenOver
+            n | n == 0x8f -> pure DisconnectReasonTopicFilterInvalid
+            n | n == 0x90 -> pure DisconnectReasonTopicNameInvalid
+            n | n == 0x93 -> pure DisconnectReasonReceiveMaximumExceeded
+            n | n == 0x94 -> pure DisconnectReasonTopicAliasInvalid
+            n | n == 0x95 -> pure DisconnectReasonPacketTooLarge
+            n | n == 0x96 -> pure DisconnectReasonMessageRateTooHigh
+            n | n == 0x97 -> pure DisconnectReasonQuotaExceeded
+            n | n == 0x98 -> pure DisconnectReasonAdministrativeAction
+            n | n == 0x99 -> pure DisconnectReasonPayloadFormatInvalid
+            n | n == 0x9a -> pure DisconnectReasonRetainNotSupported
+            n | n == 0x9b -> pure DisconnectReasonQoSNotSupported
+            n | n == 0x9c -> pure DisconnectReasonUseAnotherServer
+            n | n == 0x9d -> pure DisconnectReasonServerMoved
+            n | n == 0x9e -> pure DisconnectReasonSharedSubscriptionsNotSupported
+            n | n == 0x9f -> pure DisconnectReasonConnectionRateExceeded
+            n | n == 0xa0 -> pure DisconnectReasonMaximumConnectTime
+            n | n == 0xa1 -> pure DisconnectReasonSubscriptionIdentifiersNotSupported
+            n | n == 0xa2 -> pure DisconnectReasonWildcardSubscriptionsNotSupported
+              | otherwise -> fail $ "Invalid disconnect reason code " <> show n
+
+    put DisconnectReasonNormalDisconnection                 = putWord8 0x00
+    put DisconnectReasonDisconnectWithWillMessage           = putWord8 0x04
+    put DisconnectReasonUnspecifiedError                    = putWord8 0x80
+    put DisconnectReasonMalformedPacket                     = putWord8 0x81
+    put DisconnectReasonProtocolError                       = putWord8 0x82
+    put DisconnectReasonImplementationSpecificError         = putWord8 0x83
+    put DisconnectReasonNotAuthorized                       = putWord8 0x87
+    put DisconnectReasonServerBusy                          = putWord8 0x89
+    put DisconnectReasonServerShuttingDown                  = putWord8 0x8b
+    put DisconnectReasonBadAuthenticationMethod             = putWord8 0x8c
+    put DisconnectReasonKeepAliveTimeout                    = putWord8 0x8d
+    put DisconnectReasonSessionTakenOver                    = putWord8 0x8e
+    put DisconnectReasonTopicFilterInvalid                  = putWord8 0x8f
+    put DisconnectReasonTopicNameInvalid                    = putWord8 0x90
+    put DisconnectReasonReceiveMaximumExceeded              = putWord8 0x93
+    put DisconnectReasonTopicAliasInvalid                   = putWord8 0x94
+    put DisconnectReasonPacketTooLarge                      = putWord8 0x95
+    put DisconnectReasonMessageRateTooHigh                  = putWord8 0x96
+    put DisconnectReasonQuotaExceeded                       = putWord8 0x97
+    put DisconnectReasonAdministrativeAction                = putWord8 0x98
+    put DisconnectReasonPayloadFormatInvalid                = putWord8 0x99
+    put DisconnectReasonRetainNotSupported                  = putWord8 0x9a
+    put DisconnectReasonQoSNotSupported                     = putWord8 0x9b
+    put DisconnectReasonUseAnotherServer                    = putWord8 0x9c
+    put DisconnectReasonServerMoved                         = putWord8 0x9d
+    put DisconnectReasonSharedSubscriptionsNotSupported     = putWord8 0x9e
+    put DisconnectReasonConnectionRateExceeded              = putWord8 0x9f
+    put DisconnectReasonMaximumConnectTime                  = putWord8 0xa0
+    put DisconnectReasonSubscriptionIdentifiersNotSupported = putWord8 0xa1
+    put DisconnectReasonWildcardSubscriptionsNotSupported   = putWord8 0xa2
+
+data DisconnectR = DisconnectR
+    { disconnectRReason :: DisconnectReason
+
+    }
 
 data ControlPacket
     = Connect ConnectR
